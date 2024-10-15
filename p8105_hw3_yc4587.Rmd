@@ -1,0 +1,265 @@
+# Question 1
+```{r}
+install.packages("tidyverse")
+install.packages("devtools")
+install.packages("gridExtra")
+
+devtools::install_github("p8105/p8105.datasets")
+
+library(p8105.datasets)
+data("ny_noaa")
+
+library(dplyr)
+library(lubridate)
+
+library(ggplot2)
+library(gridExtra)
+
+df <- ny_noaa %>%
+  mutate(
+    year = year(date),
+    month = month(date),
+    day = day(date)
+  )
+
+table(df$snow)
+
+# 0 is the most common observation
+
+df$tmax <- as.numeric(df$tmax)
+df$tmin <- as.numeric(df$tmin)
+df$snow <- as.numeric(df$snow)
+
+avg_temp <- df %>%
+  filter(month %in% c(1, 7), !is.na(tmax)) %>%
+  group_by(id, year, month) %>%
+  summarise(avg_tmax = mean(tmax, na.rm = TRUE)) %>%
+  ungroup()
+
+plot_list <- lapply(unique(avg_temp$id), function(station) {
+  
+  station_data <- avg_temp %>% filter(id == station)
+  
+  p1 <- ggplot(station_data %>% filter(month == 1), aes(x = year, y = avg_tmax)) +
+    geom_line() +
+    geom_point() +
+    labs(title = paste("Average Max Temperature in January -", station),
+         x = "Year", y = "Avg Max Temp (°C)") +
+    theme_minimal()
+  
+  p2 <- ggplot(station_data %>% filter(month == 7), aes(x = year, y = avg_tmax)) +
+    geom_line() +
+    geom_point() +
+    labs(title = paste("Average Max Temperature in July -", station),
+         x = "Year", y = "Avg Max Temp (°C)") +
+    theme_minimal()
+  
+  grid.arrange(p1, p2, ncol = 1)
+})
+
+for (plot in plot_list) {
+  print(plot)
+}
+
+weather_data <- df %>%
+  filter(!is.na(tmin), !is.na(tmax))
+
+p1 <- ggplot(weather_data, aes(x = tmin, y = tmax)) +
+  geom_hex() +
+  scale_fill_viridis_c() +
+  labs(title = "Tmax vs Tmin", x = "Tmin (°C)", y = "Tmax (°C)") +
+  theme_minimal()
+
+snow_data <- df %>%
+  filter(snow > 0 & snow < 100)
+
+p2 <- ggplot(snow_data, aes(x = as.factor(year), y = snow)) +
+  geom_boxplot() +
+  labs(title = "Distribution of Snowfall (0 < Snow < 100)", x = "Year", y = "Snowfall (cm)") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+grid.arrange(p1, p2, ncol = 1)
+```
+
+# Question 2
+```{r}
+getwd()
+setwd("~/p8105_hw3_yc4587")
+library(tidyr)
+
+nhanes_accel <- read.csv("nhanes_accel.csv")
+nhanes_covar <- read.csv("nhanes_covar.csv", skip = 4)
+
+nhanes_covar <- nhanes_covar %>%
+  filter(age >= 21 & !is.na(education)) %>%
+  mutate(sex = ifelse(sex == 1, "Male", "Female"))
+
+gender_education_table <- nhanes_covar %>%
+  group_by(education, sex) %>%
+  summarise(count = n()) %>%
+  arrange(education)
+
+ggplot(nhanes_covar, aes(x = age, fill = sex)) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~ education, scales = "free_y") +
+  labs(title = "Age Distribution by Gender and Education",
+       x = "Age", y = "Density") +
+  theme_minimal()
+
+# comment 1: Here’s a specific comment on the table and the age distribution visualization: In the Education Level 1 category, there is a significantly higher representation of females (26) compared to males (4). This suggests that more women are grouped under this education level in the dataset. For Education Level 2, the gender distribution is more balanced, with 5 males and 3 females. In Education Level 3, females still outnumber males, with 6 females compared to 2 males.Age Distribution Visualization Comments: In Education Level 1, both men and women exhibit a spread of ages from about 20 to 80, with some clustering in the middle age range. However, due to the higher number of women, the density curve for females is generally higher. In Education Level 2, male and female age distributions appear to be more evenly matched, though sample size might be smaller. The density curves show overlapping age distributions, indicating similar age ranges. For Education Level 3, we again see a dominance of females. The density curve suggests that females might cover a broader range of ages compared to males, who are fewer in number.This breakdown provides insight into how gender representation varies by education level and how age distributions shift within those groups. These patterns could be significant depending on the research objectives, particularly if gender and education level are factors in the study’s outcomes.
+
+total_activity <- nhanes_accel %>%
+  mutate(total = rowSums(select(., -SEQN))) %>%
+  select(SEQN, total)
+
+merged_df <- merge(nhanes_covar, total_activity, by = "SEQN")
+
+ggplot(merged_df, aes(x = age, y = total, color = sex)) +
+  geom_point(alpha = 0.6) +
+  scale_color_manual(values = c("Male" = "blue", "Female" = "pink")) +
+  geom_smooth(method = "lm") +
+  facet_wrap(~ education, ncol = 1) +
+  labs(title = "Total Activity vs Age",
+       x = "Age",
+       y = "Total Activity",
+       color = "Gender") +
+  theme_minimal()
+
+# comment 2: The plot titled “Total Activity vs Age” shows the relationship between total activity levels and age, separated by education categories (1, 2, and 3) and gender. Across all education levels, there appears to be a slight negative correlation between age and total activity. This suggests that as individuals age, their total activity tends to decrease. The trend lines for both genders across all education levels are relatively flat, indicating that while there is a decline in activity with age, it is not steep. For all education categories, males (blue line) and females (red line) show a similar declining trend. In general, the activity levels for men tend to be slightly higher than for women at most ages. This difference is more pronounced in Education Level 3, where males consistently show higher activity levels than females. Education Level 1: Both genders show a gradual decline in activity with age. There is some spread in activity levels at younger ages, which narrows as age increases. Education Level 2: The activity decline is visible but less varied in comparison to Level 1, suggesting a narrower range of activity levels across ages.Education Level 3: This level exhibits a similar downward trend with age. However, the spread of points for males suggests more variation in activity levels at older ages compared to females. In younger age groups (20–40), there is more variability in total activity levels, particularly among males. This variability decreases as age increases, indicating a more consistent level of lower activity in older age groups. Females in all education levels show less variability in activity levels compared to males, indicating more consistent activity patterns as they age.
+
+merged_df <- merge(nhanes_accel, nhanes_covar, by = "SEQN") %>%
+  group_by(education, sex) %>%
+  summarize(across(.cols = -c(SEQN, age, BMI), .fns = sum, na.rm = TRUE)) %>%
+  pivot_longer(
+    cols = starts_with("min"),
+    names_to = "time",
+    values_to = "value"
+  ) %>%
+  mutate(time = gsub("min", "", time))
+
+merged_df$time <- as.numeric(merged_df$time)
+  
+ggplot(merged_df, aes(x = time, y = value, color = sex)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm") +
+  facet_wrap(~education, ncol = 1) +
+  labs(title = "24-hour Activity Time Courses by Education Level",
+       x = "Hour of Day", y = "Activity Level") +
+  scale_color_manual(values = c("Male" = "blue", "Female" = "red")) +
+  theme_minimal()
+
+# comment 3: The plot titled “24-hour Activity Time Courses by Education Level” shows activity levels over the course of a day for different education levels, separated by gender. In all three education levels, both males and females have a low activity level during early morning hours (roughly 0–500 on the x-axis), which likely corresponds to nighttime or sleeping hours. Activity levels start to increase gradually as the morning progresses, peaking around midday and maintaining relatively high levels throughout the afternoon. In each education level, there are subtle differences between males (blue) and females (red). Education Level 1: The activity patterns of males and females are quite similar, with both reaching similar peaks and exhibiting similar declines. Education Level 2: The curves are closely aligned, though females appear to have a slightly higher activity level in the early hours compared to males. Education Level 3: Males show slightly higher peaks during midday and early afternoon compared to females, suggesting they may engage in more intense or prolonged activities during those hours. The overall shape of the activity pattern is similar across education levels, suggesting that the time of day drives the pattern more than education level. Education Level 1 shows a more pronounced peak around midday compared to Levels 2 and 3, indicating that individuals in this group might be more active during traditional work or school hours. Education Level 3 shows a relatively steady decline in activity toward the end of the day, possibly suggesting a more structured or predictable daily routine. Activity levels tend to decline in the evening across all levels and genders, as individuals wind down their daily activities. The smooth trend lines and overlapping patterns indicate that while there are some differences in peak times and intensity, the general shape of the daily activity pattern is consistent regardless of education level or gender.
+```
+# Question 3
+```{r}
+getwd()
+setwd("~/p8105_hw3_yc4587")
+library(tidyr)
+
+jan_2020 <- read.csv("citibike/Jan 2020 Citi.csv")
+jan_2024 <- read.csv("citibike/Jan 2024 Citi.csv")
+july_2020 <- read.csv("citibike/July 2020 Citi.csv")
+july_2024 <- read.csv("citibike/July 2024 Citi.csv")
+
+jan_2020 <- jan_2020 %>%
+  mutate(
+    year = 2020,
+    month = "Jan"
+  )
+
+jan_2024 <- jan_2024 %>%
+  mutate(
+    year = 2024,
+    month = "Jan"
+  )
+
+july_2020 <- july_2020 %>%
+  mutate(
+    year = 2020,
+    month = "July"
+  )
+
+july_2024 <- july_2024 %>%
+  mutate(
+    year = 2024,
+    month = "July"
+  )
+
+combined_df <- bind_rows(jan_2020, jan_2024, july_2020, july_2024)
+
+weekdays_order <- c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+combined_df$weekdays <- factor(combined_df$weekdays, levels = weekdays_order)
+
+total_count <- combined_df %>%
+  group_by(year, month, member_casual) %>%
+  summarise(count = n()) %>%
+  ungroup()
+
+# comment 1 table total_count: The table presents data on the number of rides categorized by membership type (casual vs. member) across two different years (2020 and 2024) and two months (January and July). For both casual and member riders, there is a noticeable increase in ride counts from 2020 to 2024. Casual riders increased from 984 (January 2020) to 2,108 (January 2024) and from 5,637 (July 2020) to 10,894 (July 2024). Member riders also show a significant rise, from 11,436 (January 2020) to 16,753 (January 2024) and from 15,411 (July 2020) to 36,262 (July 2024). Both years show a clear seasonal trend where ride counts are higher in July compared to January. This pattern is consistent across both casual and member riders. In July 2024, member rides (36,262) are considerably higher than in January 2024 (16,753), reflecting an increase likely due to better weather and more outdoor activities. Member riders consistently outnumber casual riders in both months and years, suggesting a higher base of regular riders who utilize the service year-round. The growth rate appears to be steeper for members compared to casual riders. For example, member rides increased by more than double in July from 2020 (15,411) to 2024 (36,262), while casual rides showed a less than double increase for the same period. The data suggests strong growth in ridership over time, with members driving much of the increase, especially in peak months like July. This could indicate successful efforts to convert casual riders into members or other factors that incentivize regular ridership.
+
+top_starting_station <- july_2024 %>%
+  group_by(start_station_name) %>%
+  summarise(count = n()) %>%
+  arrange(-count)
+
+top_starting_station <- head(top_starting_station, 5)
+
+print(top_starting_station)
+
+median_ride_duration_year <- combined_df %>%
+  group_by(year) %>%
+  summarise(duration = median(duration, na.rm = TRUE)) %>%
+  ungroup()
+  
+median_ride_duration_month <- combined_df %>%
+  group_by(month) %>%
+  summarise(duration = median(duration, na.rm = TRUE)) %>%
+  ungroup()
+
+median_ride_duration_weekdays <- combined_df %>%
+  group_by(weekdays) %>%
+  summarise(duration = median(duration, na.rm = TRUE)) %>%
+  arrange(weekdays)
+
+p_year <- ggplot(median_ride_duration_year, aes(x = year, y = duration)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Ride Duration by Year",
+       x = "Year",
+       y = "Ride Duration (minutes)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p_month <- ggplot(median_ride_duration_month, aes(x = month, y = duration)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Ride Duration by Month",
+       x = "Month",
+       y = "Ride Duration (minutes)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+p_weekdays <- ggplot(median_ride_duration_weekdays, aes(x = weekdays, y = duration)) +
+  geom_point(alpha = 0.6) +
+  labs(title = "Ride Duration by Weekday",
+       x = "Weekday",
+       y = "Ride Duration (minutes)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+library(gridExtra)
+grid.arrange(p_year, p_month, p_weekdays, ncol = 1)
+
+# comment 2: The plot displays ride durations across three different perspectives: by year, by month, and by weekday. The ride durations in both 2020 and 2024 appear consistent, with an average duration around 11 minutes. There is no significant change or trend over these years, indicating that the average ride length has remained stable over time. Ride durations are slightly longer in July compared to January. This increase might be associated with warmer weather, as people tend to take longer rides during summer months. In January, ride durations are shorter, possibly due to colder weather and less favorable riding conditions. Across the days of the week, ride durations show a consistent pattern, with only minor variations. Saturday has the highest average duration, suggesting that riders may take longer, more leisurely rides on weekends compared to weekdays. This could be linked to recreational activities or weekend outings. Weekdays exhibit more uniform ride durations, possibly due to commuting patterns where riders are focused on reaching destinations rather than leisurely riding. Overall, the data suggests that while ride durations remain relatively stable year over year, there are small seasonal and weekly variations, with slightly longer rides in warmer months and on weekends. This could inform scheduling and bike availability, especially during weekends and summer months, to accommodate potentially longer ride times.
+
+ggplot(combined_df, aes(x = duration, fill = interaction(member_casual, rideable_type))) +
+  geom_histogram(position = "dodge", bins = 30, alpha = 0.7) +
+  facet_wrap(~ month, ncol = 1) +  # Facet by month
+  labs(title = "Distribution of Ride Duration by Month, Membership Status, and Bike Type",
+       x = "Ride Duration (minutes)",
+       y = "Count",
+       fill = "Membership Status and Bike Type") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# comment 3:The plot shows the distribution of ride durations in January and July, categorized by membership status (casual vs. member) and bike type (classic vs. electric). Most rides, regardless of month, membership status, or bike type, have durations clustered around shorter times, primarily under 30 minutes. This suggests that short rides are common across the board. Both January and July display similar patterns, with a higher concentration of shorter rides. In July, there are slightly higher counts across all categories compared to January, likely due to more favorable weather conditions that encourage riding. This seasonal increase is particularly noticeable for casual riders using classic bikes. Casual Riders: Casual riders predominantly use classic bikes, with a smaller proportion using electric bikes. The peak is highest for casual classic bike rides, especially in July. Members: Members also have a strong preference for classic bikes, but there is a significant number of rides with electric bikes as well. The counts for member rides, particularly with electric bikes, are slightly higher in July than in January, reflecting increased usage during warmer months. Electric bikes generally show a broader distribution, indicating that rides with electric bikes tend to have a more varied duration compared to classic bikes. Classic Bikes: Both casual and member classic bike rides have a sharp decline in frequency as ride duration increases, showing that classic bikes are mostly used for short trips. Electric Bikes: Electric bikes show a slightly more spread-out duration distribution, suggesting that they are used for a wider range of trip lengths. This might reflect the ease of covering longer distances with electric bikes. This distribution indicates that while both members and casual riders favor short rides, electric bikes tend to be used for somewhat longer trips, likely due to the added convenience and speed. The data also highlights the influence of seasonality on ridership, with a notable increase in activity during the summer month of July.
+```
